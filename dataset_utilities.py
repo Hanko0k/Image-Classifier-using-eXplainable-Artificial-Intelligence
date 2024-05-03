@@ -134,4 +134,4 @@ def verify_directory_same_type(dir: str)-> None:
 # print(metadata.keys())
 # answer = metadata_lookup(metadata, '002-22', 'defect', 'braeburn')
 # print(answer)
-# verify_directory_same_type("C:\\Users\\David\\Documents\\Image-Classifier-using-eXplainable-Artificial-Intelligence\\braeburn binary classifier dataset\\validation\\no defect")
+# verify_directory_same_type("C:\\Users\\David\\Documents\\Image-Classifier-using-eXplainable-Artificial-Intelligence\\braeburn binary classifier dataset\\defective")
