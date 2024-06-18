@@ -1,0 +1,19 @@
+main.py
+
+# Ignore test data and generated plots
+*.bmp
+*.png
+
+# Ignore virtual environment
+myenv/
+
+# Some of the saved models are too large for GitHub
+Trained Models/
+*.keras
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+
+# Ignore VSCode settings
+.vscode/settings.json
