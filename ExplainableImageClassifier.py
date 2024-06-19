@@ -486,8 +486,8 @@ class ExplainableImageClassifier:
         #     self.show_batch(images, labels, class_names, dataset_name="Training Set")
         # for images, labels in val_data.take(1):
         #     self.show_batch(images, labels, class_names, dataset_name="Validation Set")
-        for images, labels in test_data.take(1):
-            self.show_batch(images, labels, class_names, dataset_name="Test Set")
+        # for images, labels in test_data.take(1):
+        #     self.show_batch(images, labels, class_names, dataset_name="Test Set")
 
         return train_data, val_data, test_data
     
@@ -537,31 +537,31 @@ class ExplainableImageClassifier:
         elif architecture == 'chatGPT':
             model = Sequential()
             # First Convolutional Block
-            model.add(Conv2D(32, (3, 3), activation='relu', padding='same', input_shape=input_shape))
+            model.add(Conv2D(32, (3, 3), activation='relu', input_shape=input_shape))
             model.add(BatchNormalization())
             model.add(MaxPooling2D((2, 2)))
             model.add(Dropout(0.25))
 
             # Second Convolutional Block
-            model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
+            model.add(Conv2D(64, (3, 3), activation='relu'))
             model.add(BatchNormalization())
             model.add(MaxPooling2D((2, 2)))
             model.add(Dropout(0.25))
 
             # Third Convolutional Block
-            model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
+            model.add(Conv2D(128, (3, 3), activation='relu'))
             model.add(BatchNormalization())
             model.add(MaxPooling2D((2, 2)))
             model.add(Dropout(0.25))
 
             # Fourth Convolutional Block
-            model.add(Conv2D(256, (3, 3), activation='relu', padding='same'))
+            model.add(Conv2D(256, (3, 3), activation='relu'))
             model.add(BatchNormalization())
             model.add(MaxPooling2D((2, 2)))
             model.add(Dropout(0.25))
 
             # Fifth Convolutional Block
-            model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
+            model.add(Conv2D(512, (3, 3), activation='relu'))
             model.add(BatchNormalization())
             model.add(MaxPooling2D((2, 2)))
             model.add(Dropout(0.25))
@@ -572,7 +572,7 @@ class ExplainableImageClassifier:
             model.add(BatchNormalization())
             model.add(Dropout(0.5))
 
-            model.add(Dense(128, activation='relu'))
+            model.add(Dense(256, activation='relu'))
             model.add(BatchNormalization())
             model.add(Dropout(0.5))
 
@@ -610,6 +610,62 @@ class ExplainableImageClassifier:
 
             # This is the model we will train
             model = Model(inputs=base_model.input, outputs=predictions)
+
+        elif architecture == 'chatGPTsrs':
+            # Define the input
+            input_layer = Input(shape=(224, 224, 3))
+
+            # Convolutional Block 1
+            x = Conv2D(64, (3, 3), activation='relu')(input_layer)
+            x = BatchNormalization()(x)
+            x = Conv2D(64, (3, 3), activation='relu')(x)
+            x = BatchNormalization()(x)
+            x = MaxPooling2D((2, 2))(x)
+            x = Dropout(0.25)(x)
+
+            # Convolutional Block 2
+            x = Conv2D(128, (3, 3), activation='relu')(x)
+            x = BatchNormalization()(x)
+            x = Conv2D(128, (3, 3), activation='relu')(x)
+            x = BatchNormalization()(x)
+            x = MaxPooling2D((2, 2))(x)
+            x = Dropout(0.25)(x)
+
+            # Convolutional Block 3
+            x = Conv2D(256, (3, 3), activation='relu')(x)
+            x = BatchNormalization()(x)
+            x = Conv2D(256, (3, 3), activation='relu')(x)
+            x = BatchNormalization()(x)
+            x = MaxPooling2D((2, 2))(x)
+            x = Dropout(0.25)(x)
+
+            # Convolutional Block 4
+            x = Conv2D(512, (3, 3), activation='relu')(x)
+            x = BatchNormalization()(x)
+            x = Conv2D(512, (3, 3), activation='relu')(x)
+            x = BatchNormalization()(x)
+            x = MaxPooling2D((2, 2))(x)
+            x = Dropout(0.25)(x)
+
+            # Global Average Pooling
+            x = GlobalAveragePooling2D()(x)
+
+            # Fully Connected Layers
+            x = Dense(512, activation='relu')(x)
+            x = BatchNormalization()(x)
+            x = Dropout(0.5)(x)
+            x = Dense(256, activation='relu')(x)
+            x = BatchNormalization()(x)
+            x = Dropout(0.5)(x)
+
+            # Output Layer
+            output_layer = Dense(1, activation='sigmoid')(x)
+
+            # Create the model
+            model = Model(inputs=input_layer, outputs=output_layer)
+
+
+
 
         else:
             raise ValueError(f"'{architecture}' is not a recognised model architecture")
@@ -797,12 +853,11 @@ class ExplainableImageClassifier:
         return pred
     
     def get_explantion(self, model_name, test_image):
-        explanation = self.explainer.explain_instance(test_image.astype('float32'), 
+        # exp = np.expand_dims(test_image, axis=0)
+        explanation = self.explainer.explain_instance(test_image.numpy().astype('float32'), 
                                          classifier_fn=lambda img: self.model_predict(model_name, img), 
                                          top_labels=5, 
                                          hide_color=0, 
-                                        #  num_samples=1000,
-                                        #  num_samples=2000,
                                          num_samples=5000)  # Increase or decrease depending on the complexity
         
         return explanation
@@ -843,7 +898,7 @@ class ExplainableImageClassifier:
         fig, ax = plt.subplots(1, 2, figsize=(12, 6))
 
         # Display original image
-        ax[0].imshow(img_boundry)
+        ax[0].imshow(temp)
         plt.title(f"Predicted: , Actual: {truth}")
         ax[0].set_title('Original Image')
         ax[0].axis('off')
@@ -856,7 +911,7 @@ class ExplainableImageClassifier:
         fig.suptitle(f'Predicted: {predicted_class}, Actual: {truth}', fontsize=16)
       
         self.save_plot(plt)
-        plt.show()
+        # plt.show()
 
         return None
 
@@ -1196,6 +1251,14 @@ class ExplainableImageClassifier:
                     os.remove(os.path.join(class_dir, file))
                 print(f"Removed {len(files_to_remove)} files from {class_dir}")
 
+    def normalize_shap_values(self, shap_values):
+       
+
+        shap_min = np.min(shap_values)
+        shap_max = np.max(shap_values)
+
+        return (shap_values - shap_min) / (shap_max - shap_min)
+        
 
     def extract_background(self, dataset, sample_size=50):
         # Unbatch the dataset to get individual elements
@@ -1207,27 +1270,45 @@ class ExplainableImageClassifier:
 
         return background_data
 
-    def show_SHAP_explanation(self, data_path, image, sample_size=50) -> None:
-        train_ds, _, _ = self._load_dataset(data_path)
+    def show_SHAP_explanation(self, model_name, train_ds, image, sample_size=100) -> None:
+        # train_ds, _, _ = self._load_dataset(data_path)
 
         background = self.extract_background(train_ds, sample_size)
-
-        # print(f"Background shape: {background.shape}")
-        # print(f"Image shape: {image.shape}")
+      
+        print(f"Background shape: {background.shape}")
+        print(f"Image shape: {image.shape}")
 
         # Ensure the input image is batched correctly
-        if len(image.shape) == 3:
-            image = np.expand_dims(image, axis=0)
+        # if len(image.shape) == 3:
+        #     image = np.expand_dims(image, axis=0)
 
         # print(f"Batched image shape: {image.shape}")
-
+        # shap.explainers.Deep..op_handlers["AddV2"] = shap.explainers.Deep.deep_tf.passthrough
+    
         # Use DeepExplainer with the model directly
-        explainer = shap.DeepExplainer(self.model, background)
+        explainer = shap.DeepExplainer(self.models[model_name], background)
 
         shap_values = explainer.shap_values(image)
 
-        # Since it's a binary classifier, use shap_values[0]
-        shap.image_plot(shap_values[0], image)
+        shap_values_normalized = self.normalize_shap_values(shap_values)
 
+        for v in shap_values_normalized:
+            print(v)
+       
+        print(shap_values_normalized.min(), shap_values_normalized.max())
+        
+
+        # Since it's a binary classifier, use shap_values[0]
+        shap.image_plot(shap_values_normalized, image, show=False)
+
+        sub_dir = 'Plots'
+
+        if not os.path.exists(sub_dir):
+            os.makedirs(sub_dir)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"SHAP_plot_{timestamp}.png"
+        path = os.path.join(sub_dir, filename)
+        plt.savefig(path)
 
         return None

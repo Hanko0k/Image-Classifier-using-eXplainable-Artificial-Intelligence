@@ -1,33 +1,35 @@
 from ExplainableImageClassifier import ExplainableImageClassifier
 import random
 import numpy as np
-
+import shap
+from tensorflow.keras.preprocessing import image
 
 TRAIN_PATH = "C:\\Users\\David\\Documents\\Image-Classifier-using-eXplainable-Artificial-Intelligence\\Datasets\\Augmented Mixed Binary"
 # ANOTHER_PATH = "C:\\Users\\David\\Documents\\granny smith binary classifier dataset"
 # STEPHS_PATH = "C:\\Users\\David\Documents\\Image-Classifier-using-eXplainable-Artificial-Intelligence\\stephs pics"
 
-MODEL_NAME = 'ResNet50'
-IMG_HEIGHT = 224
-IMG_WIDTH = 224
+MODEL_NAME = 'chatGPT'
+IMG_HEIGHT = 128
+IMG_WIDTH = 128
+DIMS = str(IMG_HEIGHT)+'x'+str(IMG_WIDTH)
 
 classifier = ExplainableImageClassifier()
 
-classifier.train_new_model(
-    architecture=MODEL_NAME,
-    training_path=TRAIN_PATH,
-    img_height=IMG_HEIGHT, 
-    img_width=IMG_WIDTH,
-    auto_balance_dataset=True,
-    epochs=20,
-    patience=8,
-    custom_name = None,
-    save_model = True
-)
+# classifier.train_new_model(
+#     architecture=MODEL_NAME,
+#     training_path=TRAIN_PATH,
+#     img_height=IMG_HEIGHT, 
+#     img_width=IMG_WIDTH,
+#     auto_balance_dataset=True,
+#     # epochs=20,
+#     patience=10,
+#     custom_name = None,
+#     save_model = True
+# )
 
-# classifier.load_model_from_tf(IMG_HEIGHT+'x'+IMG_WIDTH+MODEL_NAME)
+classifier.load_model_from_tf(DIMS+MODEL_NAME)
 
-_, _, test_ds = classifier._load_data_from_directory(
+train_ds, _, test_ds = classifier._load_data_from_directory(
                     path=TRAIN_PATH,
                     img_height=IMG_HEIGHT,
                     img_width=IMG_WIDTH,
@@ -56,14 +58,31 @@ show_image = img.numpy().astype("float32")
 show_image = show_image * 255
 show_image = show_image.astype("uint8")
 
-test_image = img.numpy().astype("float32")
+# test_image = img.numpy().astype("float32")
 
-fake_img_batch = np.expand_dims(test_image, axis=0)
+fake_img_batch = np.expand_dims(img, axis=0)
 # classifier.visualize_attention_map('64x64simple_binary_cnn', test_image)
-predicted_label = classifier.models[IMG_HEIGHT+'x'+IMG_WIDTH+MODEL_NAME].predict(fake_img_batch)
+predicted_label = classifier.models[DIMS+MODEL_NAME].predict(fake_img_batch)
 
-explanation = classifier.get_explantion(model_name=IMG_HEIGHT+'x'+IMG_WIDTH+MODEL_NAME, test_image=test_image)
+explanation = classifier.get_explantion(model_name=DIMS+MODEL_NAME, test_image=img)
 classifier.show_explanation(explanation, original_image=show_image, truth=label, predicted_class=predicted_label)
+
+# # Create an explainer object
+# explainer = shap.GradientExplainer(classifier.models[DIMS+MODEL_NAME], fake_img_batch)
+# shap_values = explainer.shap_values(fake_img_batch)
+
+# # Visualize the SHAP values
+# shap.image_plot(shap_values, fake_img_batch)
+
+# classifier.show_SHAP_explanation(
+#     model_name=DIMS+MODEL_NAME, 
+#     train_ds=train_ds,
+#     image=fake_img_batch,
+# )
+
+
+
+
 
 
 
