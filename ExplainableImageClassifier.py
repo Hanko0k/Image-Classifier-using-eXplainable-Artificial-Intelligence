@@ -17,6 +17,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import os
 from datetime import datetime
 import json
+import cv2
 
 # Define the center-biased attention layer
 class CenterBiasedAttentionLayer(Layer):
@@ -534,47 +535,47 @@ class ExplainableImageClassifier:
             model.add(Dense(128, activation='relu'))
             model.add(Dense(1, activation='sigmoid'))
 
-        elif architecture == 'chatGPT':
+        elif architecture == '5DeepCNN':
             model = Sequential()
             # First Convolutional Block
             model.add(Conv2D(32, (3, 3), activation='relu', input_shape=input_shape))
-            model.add(BatchNormalization())
+            # model.add(BatchNormalization())
             model.add(MaxPooling2D((2, 2)))
-            model.add(Dropout(0.25))
+            # model.add(Dropout(0.25))
 
             # Second Convolutional Block
             model.add(Conv2D(64, (3, 3), activation='relu'))
-            model.add(BatchNormalization())
+            # model.add(BatchNormalization())
             model.add(MaxPooling2D((2, 2)))
-            model.add(Dropout(0.25))
+            # model.add(Dropout(0.25))
 
             # Third Convolutional Block
             model.add(Conv2D(128, (3, 3), activation='relu'))
-            model.add(BatchNormalization())
+            # model.add(BatchNormalization())
             model.add(MaxPooling2D((2, 2)))
-            model.add(Dropout(0.25))
+            # model.add(Dropout(0.25))
 
             # Fourth Convolutional Block
             model.add(Conv2D(256, (3, 3), activation='relu'))
-            model.add(BatchNormalization())
+            # model.add(BatchNormalization())
             model.add(MaxPooling2D((2, 2)))
-            model.add(Dropout(0.25))
+            # model.add(Dropout(0.25))
 
             # Fifth Convolutional Block
             model.add(Conv2D(512, (3, 3), activation='relu'))
-            model.add(BatchNormalization())
+            # model.add(BatchNormalization())
             model.add(MaxPooling2D((2, 2)))
-            model.add(Dropout(0.25))
+            # model.add(Dropout(0.25))
 
             # Fully Connected Layers
             model.add(Flatten())
             model.add(Dense(512, activation='relu'))
-            model.add(BatchNormalization())
-            model.add(Dropout(0.5))
+            # model.add(BatchNormalization())
+            # model.add(Dropout(0.5))
 
             model.add(Dense(256, activation='relu'))
-            model.add(BatchNormalization())
-            model.add(Dropout(0.5))
+            # model.add(BatchNormalization())
+            # model.add(Dropout(0.5))
 
             # model.add(Dense(num_classes, activation='softmax' if num_classes > 2 else 'sigmoid'))
             model.add(Dense(1, activation='sigmoid'))
@@ -610,62 +611,6 @@ class ExplainableImageClassifier:
 
             # This is the model we will train
             model = Model(inputs=base_model.input, outputs=predictions)
-
-        elif architecture == 'chatGPTsrs':
-            # Define the input
-            input_layer = Input(shape=(224, 224, 3))
-
-            # Convolutional Block 1
-            x = Conv2D(64, (3, 3), activation='relu')(input_layer)
-            x = BatchNormalization()(x)
-            x = Conv2D(64, (3, 3), activation='relu')(x)
-            x = BatchNormalization()(x)
-            x = MaxPooling2D((2, 2))(x)
-            x = Dropout(0.25)(x)
-
-            # Convolutional Block 2
-            x = Conv2D(128, (3, 3), activation='relu')(x)
-            x = BatchNormalization()(x)
-            x = Conv2D(128, (3, 3), activation='relu')(x)
-            x = BatchNormalization()(x)
-            x = MaxPooling2D((2, 2))(x)
-            x = Dropout(0.25)(x)
-
-            # Convolutional Block 3
-            x = Conv2D(256, (3, 3), activation='relu')(x)
-            x = BatchNormalization()(x)
-            x = Conv2D(256, (3, 3), activation='relu')(x)
-            x = BatchNormalization()(x)
-            x = MaxPooling2D((2, 2))(x)
-            x = Dropout(0.25)(x)
-
-            # Convolutional Block 4
-            x = Conv2D(512, (3, 3), activation='relu')(x)
-            x = BatchNormalization()(x)
-            x = Conv2D(512, (3, 3), activation='relu')(x)
-            x = BatchNormalization()(x)
-            x = MaxPooling2D((2, 2))(x)
-            x = Dropout(0.25)(x)
-
-            # Global Average Pooling
-            x = GlobalAveragePooling2D()(x)
-
-            # Fully Connected Layers
-            x = Dense(512, activation='relu')(x)
-            x = BatchNormalization()(x)
-            x = Dropout(0.5)(x)
-            x = Dense(256, activation='relu')(x)
-            x = BatchNormalization()(x)
-            x = Dropout(0.5)(x)
-
-            # Output Layer
-            output_layer = Dense(1, activation='sigmoid')(x)
-
-            # Create the model
-            model = Model(inputs=input_layer, outputs=output_layer)
-
-
-
 
         else:
             raise ValueError(f"'{architecture}' is not a recognised model architecture")
@@ -848,17 +793,18 @@ class ExplainableImageClassifier:
         return test_ds
     
     def model_predict(self, model_name, image):
-        # print("DEBUG: Image shape:", image.shape)
         pred = self.models[model_name].predict(image)
         return pred
     
-    def get_explantion(self, model_name, test_image):
-        # exp = np.expand_dims(test_image, axis=0)
-        explanation = self.explainer.explain_instance(test_image.numpy().astype('float32'), 
-                                         classifier_fn=lambda img: self.model_predict(model_name, img), 
-                                         top_labels=5, 
-                                         hide_color=0, 
-                                         num_samples=5000)  # Increase or decrease depending on the complexity
+    def get_explantion(self, model_name, img):
+
+        img = img.numpy().astype('uint8')
+        explanation = self.explainer.explain_instance(
+                                    img, 
+                                    classifier_fn= lambda img: self.model_predict(model_name, img), 
+                                    #  top_labels=5, 
+                                    num_samples=1000 # Increase or decrease depending on the complexity
+                                    )  
         
         return explanation
         
@@ -1275,9 +1221,6 @@ class ExplainableImageClassifier:
 
         background = self.extract_background(train_ds, sample_size)
       
-        print(f"Background shape: {background.shape}")
-        print(f"Image shape: {image.shape}")
-
         # Ensure the input image is batched correctly
         # if len(image.shape) == 3:
         #     image = np.expand_dims(image, axis=0)
@@ -1291,12 +1234,6 @@ class ExplainableImageClassifier:
         shap_values = explainer.shap_values(image)
 
         shap_values_normalized = self.normalize_shap_values(shap_values)
-
-        for v in shap_values_normalized:
-            print(v)
-       
-        print(shap_values_normalized.min(), shap_values_normalized.max())
-        
 
         # Since it's a binary classifier, use shap_values[0]
         shap.image_plot(shap_values_normalized, image, show=False)
@@ -1312,3 +1249,43 @@ class ExplainableImageClassifier:
         plt.savefig(path)
 
         return None
+    
+    def make_gradcam_heatmap(self, img_array, model_name, last_conv_layer_name, pred_index=None):
+        model = self.models[model_name]
+
+        grad_model = tf.keras.models.Model(
+            [model.inputs], [model.get_layer(last_conv_layer_name).output, model.output]
+        )
+
+        with tf.GradientTape() as tape:
+            conv_outputs, predictions = grad_model(img_array)
+            if pred_index is None:
+                pred_index = tf.argmax(predictions[0])
+            class_channel = predictions[:, pred_index]
+
+        grads = tape.gradient(class_channel, conv_outputs)
+        pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+
+        conv_outputs = conv_outputs[0]
+        heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
+        heatmap = tf.squeeze(heatmap)
+
+        heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
+        
+        return heatmap.numpy()
+    
+    def superimpose_heatmap(self, img, heatmap, alpha=0.4):
+  
+        img = img.numpy().astype("float32")
+        img = img * 255
+        img = img.astype('uint8')
+    
+        heatmap = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
+        heatmap = np.uint8(255 * heatmap)
+        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+        heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+
+        # superimposed_img = heatmap * alpha + img
+        superimposed_img = cv2.addWeighted(img, 1, heatmap_rgb, alpha, 0)
+
+        return superimposed_img

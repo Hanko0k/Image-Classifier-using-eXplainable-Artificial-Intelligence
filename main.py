@@ -3,13 +3,16 @@ import random
 import numpy as np
 import shap
 from tensorflow.keras.preprocessing import image
+import matplotlib.pyplot as plt
+import os
+import datetime
 
-TRAIN_PATH = "C:\\Users\\David\\Documents\\Image-Classifier-using-eXplainable-Artificial-Intelligence\\Datasets\\Augmented Mixed Binary"
-# ANOTHER_PATH = "C:\\Users\\David\\Documents\\granny smith binary classifier dataset"
-# STEPHS_PATH = "C:\\Users\\David\Documents\\Image-Classifier-using-eXplainable-Artificial-Intelligence\\stephs pics"
+TRAIN_PATH = os.path.join(os.getcwd(), "Datasets\\Augmented Mixed Binary")
+
+# TRAIN_PATH = "C:\\Users\\David\\Documents\\Image-Classifier-using-eXplainable-Artificial-Intelligence\\Datasets\\Augmented Mixed Binary"
 
 MODEL_NAME = 'chatGPT'
-IMG_HEIGHT = 128
+IMG_HEIGHT =128
 IMG_WIDTH = 128
 DIMS = str(IMG_HEIGHT)+'x'+str(IMG_WIDTH)
 
@@ -61,24 +64,53 @@ show_image = show_image.astype("uint8")
 # test_image = img.numpy().astype("float32")
 
 fake_img_batch = np.expand_dims(img, axis=0)
-# classifier.visualize_attention_map('64x64simple_binary_cnn', test_image)
 predicted_label = classifier.models[DIMS+MODEL_NAME].predict(fake_img_batch)
 
-explanation = classifier.get_explantion(model_name=DIMS+MODEL_NAME, test_image=img)
-classifier.show_explanation(explanation, original_image=show_image, truth=label, predicted_class=predicted_label)
 
-# # Create an explainer object
-# explainer = shap.GradientExplainer(classifier.models[DIMS+MODEL_NAME], fake_img_batch)
-# shap_values = explainer.shap_values(fake_img_batch)
+# explanation = classifier.get_explantion(model_name=DIMS+MODEL_NAME, img=img)
+# classifier.show_explanation(explanation, original_image=show_image, truth=label, predicted_class=predicted_label)
 
-# # Visualize the SHAP values
-# shap.image_plot(shap_values, fake_img_batch)
 
-# classifier.show_SHAP_explanation(
-#     model_name=DIMS+MODEL_NAME, 
-#     train_ds=train_ds,
-#     image=fake_img_batch,
-# )
+classifier.show_SHAP_explanation(
+    model_name=DIMS+MODEL_NAME, 
+    train_ds=train_ds,
+    image=fake_img_batch,
+)
+
+last_conv_layer_name = "conv2d_2"
+heatmap = classifier.make_gradcam_heatmap(
+                    img_array=fake_img_batch, 
+                    model_name=DIMS+MODEL_NAME, 
+                    last_conv_layer_name=last_conv_layer_name
+                    )
+
+superimposed_img = classifier.superimpose_heatmap(
+                img=img,
+                heatmap=heatmap
+                )
+
+plt.clf()
+fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+ax[0].imshow(show_image)
+plt.title('')
+ax[0].set_title('Original Image')
+ax[0].axis('off')
+
+# Display image with mask
+ax[1].imshow(superimposed_img)
+ax[1].set_title('Grad-CAM')
+ax[1].axis('off')
+# plt.imshow(superimposed_img)
+# plt.axis('off')
+# plt.show()
+
+sub_dir = 'Plots'
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+filename = f"GradCAM_plot_{timestamp}.png"
+path = os.path.join(sub_dir, filename)
+plt.savefig(path)
+
+
 
 
 
