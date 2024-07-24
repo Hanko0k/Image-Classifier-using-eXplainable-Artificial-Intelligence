@@ -6,109 +6,107 @@ from tensorflow.keras.preprocessing import image
 import matplotlib.pyplot as plt
 import os
 import datetime
+import DataManager
 
-TRAIN_PATH = os.path.join(os.getcwd(), "Datasets\\Augmented Mixed Binary")
+DATA_PATH = os.path.join(os.getcwd(), "Datasets\\Augmented Mixed Binary")
 
-# TRAIN_PATH = "C:\\Users\\David\\Documents\\Image-Classifier-using-eXplainable-Artificial-Intelligence\\Datasets\\Augmented Mixed Binary"
-
-MODEL_NAME = 'chatGPT'
-IMG_HEIGHT =128
-IMG_WIDTH = 128
-DIMS = str(IMG_HEIGHT)+'x'+str(IMG_WIDTH)
+ARCHITECTURE = 'simple_binary_cnn'
+IMG_DIMS = (128, 128)
 
 classifier = ExplainableImageClassifier()
 
-# classifier.train_new_model(
-#     architecture=MODEL_NAME,
-#     training_path=TRAIN_PATH,
-#     img_height=IMG_HEIGHT, 
-#     img_width=IMG_WIDTH,
-#     auto_balance_dataset=True,
-#     # epochs=20,
-#     patience=10,
-#     custom_name = None,
-#     save_model = True
+classifier.train_new_model(
+    architecture=ARCHITECTURE,
+    depth=
+    training_path=DATA_PATH,
+    img_dims=IMG_DIMS,
+    auto_balance_dataset=True,
+    epochs=5,
+    patience=10,
+    custom_name = None,
+    save_model = True
+)
+
+# classifier.load_model_from_tf(DIMS+MODEL_NAME)
+
+
+# train_ds, _, test_ds = classifier._load_data_from_directory(
+#                     path=TRAIN_PATH,
+#                     img_height=IMG_HEIGHT,
+#                     img_width=IMG_WIDTH,
+#                     batch_size=32,
+#                     auto_balance_dataset=True
 # )
 
-classifier.load_model_from_tf(DIMS+MODEL_NAME)
-
-train_ds, _, test_ds = classifier._load_data_from_directory(
-                    path=TRAIN_PATH,
-                    img_height=IMG_HEIGHT,
-                    img_width=IMG_WIDTH,
-                    batch_size=32,
-                    auto_balance_dataset=True
-)
-
-defective_samples = []
-for img_batch, label_batch in test_ds:
-    for img, label in zip(img_batch, label_batch):
-        if label == 0:
-            # images.append(img)
-            # labels.append(label)
-            defective_samples.append((img, label))
-
-# test_ds = test_ds.unbatch()
-# samples = list(test_ds)
 # defective_samples = []
-# for img, label in samples:
-#     if label == 0:
-#         defective_samples.append((img, label))
+# for img_batch, label_batch in test_ds:
+#     for img, label in zip(img_batch, label_batch):
+#         if label == 0:
+#             # images.append(img)
+#             # labels.append(label)
+#             defective_samples.append((img, label))
 
-rand_sample = random.choice(defective_samples)
-img, label = rand_sample
-show_image = img.numpy().astype("float32")
-show_image = show_image * 255
-show_image = show_image.astype("uint8")
+# # test_ds = test_ds.unbatch()
+# # samples = list(test_ds)
+# # defective_samples = []
+# # for img, label in samples:
+# #     if label == 0:
+# #         defective_samples.append((img, label))
 
-# test_image = img.numpy().astype("float32")
+# rand_sample = random.choice(defective_samples)
+# img, label = rand_sample
+# show_image = img.numpy().astype("float32")
+# show_image = show_image * 255
+# show_image = show_image.astype("uint8")
 
-fake_img_batch = np.expand_dims(img, axis=0)
-predicted_label = classifier.models[DIMS+MODEL_NAME].predict(fake_img_batch)
+# # test_image = img.numpy().astype("float32")
+
+# fake_img_batch = np.expand_dims(img, axis=0)
+# predicted_label = classifier.models[DIMS+MODEL_NAME].predict(fake_img_batch)
 
 
-# explanation = classifier.get_explantion(model_name=DIMS+MODEL_NAME, img=img)
-# classifier.show_explanation(explanation, original_image=show_image, truth=label, predicted_class=predicted_label)
+# # explanation = classifier.get_explantion(model_name=DIMS+MODEL_NAME, img=img)
+# # classifier.show_explanation(explanation, original_image=show_image, truth=label, predicted_class=predicted_label)
 
 
-classifier.show_SHAP_explanation(
-    model_name=DIMS+MODEL_NAME, 
-    train_ds=train_ds,
-    image=fake_img_batch,
-)
+# classifier.show_SHAP_explanation(
+#     model_name=DIMS+MODEL_NAME, 
+#     train_ds=train_ds,
+#     image=fake_img_batch,
+# )
 
-last_conv_layer_name = "conv2d_2"
-heatmap = classifier.make_gradcam_heatmap(
-                    img_array=fake_img_batch, 
-                    model_name=DIMS+MODEL_NAME, 
-                    last_conv_layer_name=last_conv_layer_name
-                    )
+# last_conv_layer_name = "conv2d_2"
+# heatmap = classifier.make_gradcam_heatmap(
+#                     img_array=fake_img_batch, 
+#                     model_name=DIMS+MODEL_NAME, 
+#                     last_conv_layer_name=last_conv_layer_name
+#                     )
 
-superimposed_img = classifier.superimpose_heatmap(
-                img=img,
-                heatmap=heatmap
-                )
+# superimposed_img = classifier.superimpose_heatmap(
+#                 img=img,
+#                 heatmap=heatmap
+#                 )
 
-plt.clf()
-fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-ax[0].imshow(show_image)
-plt.title('')
-ax[0].set_title('Original Image')
-ax[0].axis('off')
+# plt.clf()
+# fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+# ax[0].imshow(show_image)
+# plt.title('')
+# ax[0].set_title('Original Image')
+# ax[0].axis('off')
 
-# Display image with mask
-ax[1].imshow(superimposed_img)
-ax[1].set_title('Grad-CAM')
-ax[1].axis('off')
-# plt.imshow(superimposed_img)
-# plt.axis('off')
-# plt.show()
+# # Display image with mask
+# ax[1].imshow(superimposed_img)
+# ax[1].set_title('Grad-CAM')
+# ax[1].axis('off')
+# # plt.imshow(superimposed_img)
+# # plt.axis('off')
+# # plt.show()
 
-sub_dir = 'Plots'
-timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-filename = f"GradCAM_plot_{timestamp}.png"
-path = os.path.join(sub_dir, filename)
-plt.savefig(path)
+# sub_dir = 'Plots'
+# timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+# filename = f"GradCAM_plot_{timestamp}.png"
+# path = os.path.join(sub_dir, filename)
+# plt.savefig(path)
 
 
 
