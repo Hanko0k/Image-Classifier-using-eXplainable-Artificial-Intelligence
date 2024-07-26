@@ -34,7 +34,7 @@ class ImageManager:
             class_names = dataset.class_names
 
         if flip_binary_labels:
-            dataset = dataset.map(self.flip_binary_labels)
+            dataset = dataset.map(self._flip_binary_labels)
 
         dataset = dataset.map(self._preprocess)
 
@@ -92,14 +92,12 @@ class ImageManager:
     
     def _count_images_in_classes(self, dataset, class_names):
         class_counts = {class_name: 0 for class_name in class_names}
-        for images, labels in dataset.unbatch():
+        for _, labels in dataset.unbatch():
             class_name = class_names[labels.numpy()]
             class_counts[class_name] += 1
         return class_counts
     
-    def _get_dataset_partitions(self, ds, data_split=(0.7, 0.15, 0.15),
-                                seed=42, shuffle=False, shuffle_size=10000):
-        
+    def _get_dataset_partitions(self, ds, data_split, seed=42, shuffle=False, shuffle_size=10000):
         train_split = data_split[0]
         val_split = data_split[1]
         test_split = data_split[2]
@@ -121,24 +119,13 @@ class ImageManager:
         return train_ds, val_ds, test_ds
     
     def _preprocess(self, image, label):
-
-        crop_box = [0, 30, 0, 30]  # [start_y, end_y, start_x, end_x]
-        image = image / 255.0
-
-        # Define a threshold to identify white pixels
-        white_threshold = 100 / 255.0  # Normalized threshold for white pixels
-
-        # Generate random noise with the same shape as the image
-        noise = tf.random.uniform(shape=tf.shape(image), minval=0, maxval=1)
+        image = image / 255.0 # Normalise
 
         # Create a mask for white pixels
         white_pixels_mask = tf.reduce_all(image > white_threshold, axis=-1, keepdims=True)
 
         #  # Replace white pixels with noise
         # image = tf.where(white_pixels_mask, tf.zeros_like(image), image)
-
-        # image = self._crop_image(image, crop_box)
-        # image = self._crop_circle(image, (32,32), 22)
         
         return image, label
     
@@ -157,6 +144,13 @@ class ImageManager:
     def _crop_image(self, image, crop_box):
         """
         Crop the image to the specified crop_box.
+
+        Parameters:
+        -----------
+        image : Any
+            2D image to be cropped.
+        crop_box : list
+            Provided in the format [start_y, end_y, start_x, end_x].
         """
         return image[: ,crop_box[0]:crop_box[1], crop_box[2]:crop_box[3], :]
     

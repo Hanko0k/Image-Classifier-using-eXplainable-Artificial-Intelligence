@@ -17,7 +17,6 @@ classifier = ExplainableImageClassifier()
 
 classifier.train_new_model(
     architecture=ARCHITECTURE,
-    depth=
     training_path=DATA_PATH,
     img_dims=IMG_DIMS,
     auto_balance_dataset=True,
