@@ -10,23 +10,35 @@ import DataManager
 
 DATA_PATH = os.path.join(os.getcwd(), "Datasets\\Augmented Mixed Binary")
 
-ARCHITECTURE = 'simple_binary_cnn'
-IMG_DIMS = (128, 128)
+ARCHITECTURE = 'SimpleCNN'
+IMG_DIMS = (64, 64)
+DEFAULT_NAME = f'{IMG_DIMS[0]}x{IMG_DIMS[1]}{ARCHITECTURE}'
 
 classifier = ExplainableImageClassifier()
 
-classifier.train_new_model(
-    architecture=ARCHITECTURE,
-    training_path=DATA_PATH,
-    img_dims=IMG_DIMS,
-    auto_balance_dataset=True,
-    epochs=5,
-    patience=10,
-    custom_name = None,
-    save_model = True
-)
+# classifier.train_new_model(
+#     architecture=ARCHITECTURE,
+#     training_path=DATA_PATH,
+#     img_dims=IMG_DIMS,
+#     auto_balance_dataset=True,
+#     epochs=20,
+#     patience=10,
+#     custom_name=None,
+#     save_model=True,
+#     data_split=(.7, .15, .15)
+# )
 
-# classifier.load_model_from_tf(DIMS+MODEL_NAME)
+# train_ds, _, test_ds = classifier.image_manager.load_data_from_directory(
+#                     path=DATA_PATH,
+#                     img_dims=IMG_DIMS,
+#                     batch_size=32,
+#                     auto_balance_dataset=True,
+#                     data_split=(.7, .15, .15)
+# )
+
+
+classifier.load_model_from_tf(DEFAULT_NAME)
+# print(classifier.get_confusion_matrix(DEFAULT_NAME, test_ds))
 
 
 # train_ds, _, test_ds = classifier._load_data_from_directory(
@@ -64,8 +76,15 @@ classifier.train_new_model(
 # predicted_label = classifier.models[DIMS+MODEL_NAME].predict(fake_img_batch)
 
 
-# # explanation = classifier.get_explantion(model_name=DIMS+MODEL_NAME, img=img)
-# # classifier.show_explanation(explanation, original_image=show_image, truth=label, predicted_class=predicted_label)
+explanation = classifier.get_explantion(
+        model_name=DEFAULT_NAME, 
+        image_path=os.path.join(os.getcwd(), "Datasets\\01-002-02.bmp"),
+        method='LIME',
+        save_explanation=False
+        )
+
+# classifier.show_explanation(explanation, original_image=show_image, truth=label, predicted_class=predicted_label)
+classifier.show_explanation(explanation, truth=0)
 
 
 # classifier.show_SHAP_explanation(

@@ -19,24 +19,9 @@ from datetime import datetime
 import json
 import cv2
 from DataManager import ImageManager
+from PIL import Image
+import pickle
 
-
-class PreprocessInputLayer(Layer):
-    def __init__(self, **kwargs):
-        super(PreprocessInputLayer, self).__init__(**kwargs)
-
-    def call(self, inputs):
-        # Apply the preprocess_input from ResNet50 directly here
-        from tensorflow.keras.applications.resnet50 import preprocess_input
-        return preprocess_input(inputs)
-
-    # def get_config(self):
-    #     base_config = super(PreprocessInputLayer, self).get_config()
-    #     return base_config
-
-    # @classmethod
-    # def from_config(cls, config):
-    #     return cls(**config)
 
 class ExplainableImageClassifier:
     def __init__(self, model=None, explainable_method=None):
@@ -46,95 +31,22 @@ class ExplainableImageClassifier:
         self.train_data = None
         self.val_data = None
         self.test_data = None
-        self.normalization_layer = Rescaling(1./255)
 
         return None
     
-    # Function to visualize attention map
-    def visualize_attention_map(self, model_name, image):
-        attention_layer_model = Model(inputs=self.models[model_name].input,
-                                            outputs=self.models[model_name].get_layer('center_biased_attention').output[1])
-        attention_weights = attention_layer_model.predict(np.expand_dims(image, axis=0))
-        attention_weights = np.squeeze(attention_weights, axis=0)  # Remove batch dimension
-        attention_weights = np.mean(attention_weights, axis=-1)  # Average over channels
-
-        # Plot the original image and the attention map
-        plt.figure(figsize=(10, 5))
-        plt.subplot(1, 2, 1)
-        plt.title('Original Image')
-        plt.imshow(image)
-
-        plt.subplot(1, 2, 2)
-        plt.title('Attention Map')
-        plt.imshow(attention_weights, cmap='viridis')
-        plt.show()
-    
-    def load_pretrained_model(self, model, mods) -> None:
-        if model == 'ResNet50':
-            # Start by defining the input layer with the correct input shape
-            input_tensor = Input(shape=(224, 224, 3))
-            # Include the Rescaling layer right after the input
-            # rescaled_input = Rescaling(scale=1./255)(input_tensor)
-
-            # Apply the correct preprocessing using a Lambda layer
-            # processed_input = Lambda(preprocess_input)(input_tensor)
-            processed_input = PreprocessInputLayer()(input_tensor)
-
-            base_model = ResNet50(weights='imagenet', include_top=False, input_tensor=processed_input)
-
-            for layer in base_model.layers:
-                layer.trainable = False
-
-            if mods == 'binary':
-                # Add custom layers on top of ResNet
-                x = base_model.output
-                x = GlobalAveragePooling2D()(x)  # Add a global spatial average pooling layer
-                x = Dense(1024, activation='relu')(x)  # Add a fully-connected layer
-                predictions = Dense(1, activation='sigmoid')(x)  # Output layer for binary classification
-
-                # This is the model we will train
-                self.model = Model(inputs=base_model.input, outputs=predictions)
-
-                self.model.compile(optimizer=Adam(learning_rate=0.001), loss='binary_crossentropy', metrics=['accuracy'])
-
-
-        return None
-    
-    def train_loaded_model(self) -> None:
-        train_ds, val_ds, test_ds = self._load_dataset(self.data_path)
-
-        history = self.model.fit(
-            train_ds,
-            validation_data=val_ds,
-            epochs=40,
-            callbacks=[self.early_stopping]
-        )
-
-        save_name = 'ResNet50_2'
-        self.model.save(save_name + '.keras')
-
-        # history = self.model.fit(
-        #     train_generator,
-        #     steps_per_epoch=train_generator.samples // train_generator.batch_size,
-        #     epochs=10,  # You can change the number of epochs
-        #     validation_data=validation_generator,
-        #     validation_steps=validation_generator.samples // validation_generator.batch_size)
-
-        return None
-    
-    def save_architecture(self, model_name):
-        DIR_PATH = 'Model Architectures'
-        if not os.path.exists(DIR_PATH):
-            os.makedirs(DIR_PATH)
+    # def save_architecture(self, model_name):
+    #     DIR_PATH = 'Model Architectures'
+    #     if not os.path.exists(DIR_PATH):
+    #         os.makedirs(DIR_PATH)
             
-        model_json = self.models[model_name].to_json()
-        json_path = os.path.join(DIR_PATH, model_name + '.json')
-        with open(json_path, 'w') as file:
-            json.dump(json.loads(model_json), file, indent=4)
-            # file.write(model_json)
-        print(f"INFO: Model architecture saved to {json_path}")
+    #     model_json = self.models[model_name].to_json()
+    #     json_path = os.path.join(DIR_PATH, model_name + '.json')
+    #     with open(json_path, 'w') as file:
+    #         json.dump(json.loads(model_json), file, indent=4)
+    #         # file.write(model_json)
+    #     print(f"INFO: Model architecture saved to {json_path}")
 
-        return None
+    #     return None
     
     def save_model_to_tf(self, model_name):
         DIR_PATH = 'Trained Models'
@@ -206,7 +118,7 @@ class ExplainableImageClassifier:
         results = self.models[model_name].evaluate(test_set)
         return print(f"Evaluation results for '{model_name}': {results}")
     
-    def _create_model_from_architecture(self, architecture: str, input_shape, num_classes: int):
+    def _create_model_from_architecture(self, architecture: str, input_shape):
 
         if architecture == 'SimpleCNN':
             model = Sequential()
@@ -223,7 +135,7 @@ class ExplainableImageClassifier:
             model.add(Flatten())
             model.add(Dense(128, activation='relu'))
 
-            model.add(Dense(num_classes, activation='softmax' if num_classes > 2 else 'sigmoid'))
+            model.add(Dense(1, activation='sigmoid'))
 
         elif architecture == '5DeepCNN':
             model = Sequential()
@@ -248,30 +160,25 @@ class ExplainableImageClassifier:
 
             model.add(Dense(256, activation='relu'))
     
-            model.add(Dense(num_classes, activation='softmax' if num_classes > 2 else 'sigmoid'))
+            model.add(Dense(1, activation='sigmoid'))
 
         elif architecture == 'ResNet50':
-            input_tensor = Input(shape=(224, 224, 3))
-            # Include the Rescaling layer right after the input
-            # rescaled_input = Rescaling(scale=1./255)(input_tensor)
-
-            # Apply the correct preprocessing using a Lambda layer
-            # processed_input = Lambda(preprocess_input)(input_tensor)
-            # processed_input = PreprocessInputLayer()(input_tensor)
+            if input_shape[0] != 224 or input_shape[1] != 224:
+                raise ValueError("The Resnet architecture requires an input shape of 224 x 224")
+            
+            input_tensor = Input(shape=(224, 224, input_shape[2]))
 
             base_model = ResNet50(weights='imagenet', include_top=False, input_tensor=input_tensor)
 
-            for layer in base_model.layers:
+            for layer in base_model.layers: # Freeze the pretrained earlier layers to save on training time
                 layer.trainable = False
 
-            # if mods == 'binary':
             # Add custom layers on top of ResNet
             x = base_model.output
             x = GlobalAveragePooling2D()(x)  # Add a global spatial average pooling layer
             x = Dense(1024, activation='relu')(x)  # Add a fully-connected layer
             predictions = Dense(1, activation='sigmoid')(x)  # Output layer for binary classification
 
-            # This is the model we will train
             model = Model(inputs=base_model.input, outputs=predictions)
 
         else:
@@ -334,91 +241,6 @@ class ExplainableImageClassifier:
 
         return None
 
-        
-    def show_batch(self, image_batch, label_batch, class_names, dataset_name):
-        plt.figure(figsize=(16,8), num=f"{dataset_name} Images")
-        batch_size = image_batch.shape[0]
-        for n in range(min(16, batch_size)):  # Displaying 16 images; adjust this number based on how many images you want to show
-            ax = plt.subplot(4, 4, n+1)  # Arrange images in a 4x4 grid
-            img = image_batch[n].numpy()
-            img = img * 255.0
-            # plt.imshow(image_batch[n].numpy().astype("uint8"))  # Convert float type image back to uint8
-            plt.imshow(img.astype("uint8"))  # Convert float type image back to uint8
-            plt.title(class_names[label_batch[n]])
-            plt.axis("off")
-        plt.show()
-
-    def _define_preprocessing_layers(self):
-        augmentation = tf.keras.Sequential([
-        RandomFlip("horizontal"),
-        RandomRotation(0.1),
-        ])
-
-        return augmentation
-
-    def train_model(self, save_name, data_path:str=None)-> None:
-
-        train_ds, val_ds, test_ds = self._load_dataset(data_path)
-        # class_count = len(train_ds.class_names)
-        augmentation = self._define_preprocessing_layers()
-
-        # AUTOTUNE = tf.data.AUTOTUNE # Use caching and prefetching to improve performance.
-        # train_ds = train_ds.cache().shuffle(1000).prefetch(buffer_size=AUTOTUNE)
-        # val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
-        # test_ds = test_ds.cache().prefetch(buffer_size=AUTOTUNE)
-
-        model = tf.keras.Sequential([
-            augmentation,
-            Rescaling(1./255),
-            tf.keras.layers.Conv2D(16, 3, padding='same', activation='relu'),
-            tf.keras.layers.MaxPooling2D(),
-            tf.keras.layers.Conv2D(32, 3, padding='same', activation='relu'),
-            tf.keras.layers.MaxPooling2D(),
-            tf.keras.layers.Conv2D(64, 3, padding='same', activation='relu'),
-            tf.keras.layers.MaxPooling2D(),
-            tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(128, activation='relu'),
-            tf.keras.layers.Dense(1, activation='sigmoid')
-        ])
-
-            #Model
-        # model = Sequential()
-        # model.add(Conv2D(16, (3,3), 1, activation='relu', input_shape=(256,256,3)))
-        # model.add(MaxPooling2D())
-
-        # model.add(Conv2D(32, (3,3), 1, activation='relu'))
-        # model.add(MaxPooling2D())
-            
-        # model.add(Conv2D(16, (3,3), 1, activation='relu'))
-        # model.add(MaxPooling2D())
-
-        # model.add(Flatten())
-
-        # model.add(Dense(256, activation='relu'))
-        # #model.add(Dropout(0.5))
-        # model.add(Dense(3, activation='softmax'))
-
-        model.compile(optimizer='adam',
-                loss='binary_crossentropy',
-                metrics=['accuracy'])
-        
-        epochs=10
-        history = model.fit(
-            train_ds,
-            validation_data=val_ds,
-            epochs=epochs
-        )
-        # model.evaluate(test_ds)
-
-        # save_name = save_name + '.h5'
-        # model.save(save_name)
-        self.model = model
-        model.save(save_name + '.keras')
-
-        # self.plot_training_history(history)
-
-        return None
-    
     def plot_training_history(self, history):
         acc = history.history['accuracy']
         val_acc = history.history['val_accuracy']
@@ -441,30 +263,43 @@ class ExplainableImageClassifier:
         plt.title('Training and Validation Loss')
         plt.show()
     
-    def load_test_set(self, data_path=None):
-
-        _, _, test_ds = self._load_dataset(data_path)
-
-        return test_ds
-    
     def model_predict(self, model_name, image):
         pred = self.models[model_name].predict(image)
         return pred
     
-    def get_explantion(self, model_name, img):
+    def get_explantion(self, model_name, method, image=None, image_path=None, save_explanation=False):
 
-        img = img.numpy().astype('uint8')
+        if image_path != None:
+
+            model_input_shape = self.models[model_name].input.shape
+            target_size = (model_input_shape[1], model_input_shape[2])
+
+            image = Image.open(image_path).resize(target_size)
+
+            image = np.array(image) / 255.0
+
+        # img = img.numpy().astype('uint8')
         explanation = self.explainer.explain_instance(
-                                    img, 
-                                    classifier_fn= lambda img: self.model_predict(model_name, img), 
+                                    image, 
+                                    classifier_fn= lambda image: self.model_predict(model_name, image), 
                                     #  top_labels=5, 
                                     num_samples=1000 # Increase or decrease depending on the complexity
-                                    )  
+                                    ) 
+        
+        if save_explanation:
+            file_name = f'{method}_explanation'
+            with open(file_name.pkl, 'wb') as f:
+                pickle.dump(explanation, f)
         
         return explanation
-        
+    
+    def load_explanation(path):
+        with open (path, 'wb') as f:
+            explanation = pickle.load(f)
 
-    def show_explanation(self, explanation, original_image, truth, predicted_class):
+        return explanation
+
+    def show_explanation(self, explanation, truth, original_image=None, predicted_class=None):
     
         # temp, mask = explanation.get_image_and_mask(explanation.top_labels[0], positive_only=False, num_features=10, hide_rest=False)
      
@@ -509,7 +344,8 @@ class ExplainableImageClassifier:
         ax[1].set_title('LIME Explanation')
         ax[1].axis('off')
 
-        fig.suptitle(f'Predicted: {predicted_class}, Actual: {truth}', fontsize=16)
+        # fig.suptitle(f'Predicted: {predicted_class}, Actual: {truth}', fontsize=16)
+        fig.suptitle(f'Predicted: {explanation.top_labels[0]}, Actual: {truth}', fontsize=16)
       
         self.save_plot(plt)
         # plt.show()

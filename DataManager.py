@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.preprocessing import image_dataset_from_directory
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class ImageManager:
@@ -47,11 +48,11 @@ class ImageManager:
 
         # -- DEBUG --
         # for images, labels in train_data.take(1):
-        #     self.show_batch(images, labels, class_names, dataset_name="Training Set")
+        #     self._show_batch(images, labels, class_names, dataset_name="Training Set")
         # for images, labels in val_data.take(1):
-        #     self.show_batch(images, labels, class_names, dataset_name="Validation Set")
+        #     self._show_batch(images, labels, class_names, dataset_name="Validation Set")
         # for images, labels in test_data.take(1):
-        #     self.show_batch(images, labels, class_names, dataset_name="Test Set")
+        #     self._show_batch(images, labels, class_names, dataset_name="Test Set")
 
         return train_data, val_data, test_data
         
@@ -102,7 +103,8 @@ class ImageManager:
         val_split = data_split[1]
         test_split = data_split[2]
 
-        assert (train_split + test_split + val_split) == 1
+        if (train_split + test_split + val_split) > 1:
+            raise ValueError("Datasplit parameters are greater than 100% of dataset. Check parameters!")
         
         ds_size = len(ds)
         if shuffle:
@@ -119,20 +121,12 @@ class ImageManager:
         return train_ds, val_ds, test_ds
     
     def _preprocess(self, image, label):
+
         image = image / 255.0 # Normalise
-
-        # Create a mask for white pixels
-        white_pixels_mask = tf.reduce_all(image > white_threshold, axis=-1, keepdims=True)
-
-        #  # Replace white pixels with noise
-        # image = tf.where(white_pixels_mask, tf.zeros_like(image), image)
         
         return image, label
     
     def _random_crop_and_resize(self, image, target_size):
-        """
-        Randomly crop the image and then resize it to the target size.
-        """
         # Randomly crop the image
         cropped_image = tf.image.random_crop(image, size=[tf.shape(image)[0], target_size[0], target_size[1], tf.shape(image)[-1]])
         
@@ -156,7 +150,7 @@ class ImageManager:
     
     def _crop_circle(self, image, center, radius):
         """
-        Crop the image in a circular region with the given center and radius.
+        Effectively crop the image by applying a black mask to the area outside of a circular region with the given center and radius.
         """
         center_y, center_x = center
         mask = np.zeros((image.shape[1], image.shape[2]), dtype=np.float32)
@@ -170,27 +164,9 @@ class ImageManager:
         mask = tf.expand_dims(mask, axis=0)
         mask = tf.tile(mask, [tf.shape(image)[0], 1, 1, 3])
 
-        # Generate a random color
-        # random_color = tf.random.uniform(shape=[tf.shape(image)[0], 1, 1, 3], minval=0, maxval=1)
-
-        # # Compute the mean pixel value of the image
-        # mean_value = tf.reduce_mean(image, axis=[1, 2], keepdims=True)
-        # mean_image = tf.ones_like(image) * mean_value
-
-        # Set the mask region to black (0)
         black_image = tf.zeros_like(image)
 
-        # Create an image filled with the random color
-        # random_color_image = tf.ones_like(image) * random_color
-
-        # Generate random noise
-        random_noise = tf.random.uniform(shape=tf.shape(image), minval=0, maxval=1)
-        return image * mask + random_noise * (1 - mask)
-
-        # return image * mask
-        # return image * mask + mean_image * (1 - mask)
-        # return image * mask + black_image * (1 - mask)
-        return image * mask + random_color_image * (1 - mask)
+        return image * mask
     
     def _mask_image(self, image, mask_box):
         """
@@ -203,3 +179,16 @@ class ImageManager:
     
     def _flip_binary_labels(self, feature, label):
         return feature, 1 - label
+    
+    def _show_batch(self, image_batch, label_batch, class_names, dataset_name):
+        plt.figure(figsize=(16,8), num=f"{dataset_name} Images")
+        batch_size = image_batch.shape[0]
+        for n in range(min(16, batch_size)):  # Displaying 16 images; adjust this number based on how many images you want to show
+            ax = plt.subplot(4, 4, n+1)  # Arrange images in a 4x4 grid
+            img = image_batch[n].numpy()
+            img = img * 255.0
+            # plt.imshow(image_batch[n].numpy().astype("uint8"))  # Convert float type image back to uint8
+            plt.imshow(img.astype("uint8"))  # Convert float type image back to uint8
+            plt.title(class_names[label_batch[n]])
+            plt.axis("off")
+        plt.show()
