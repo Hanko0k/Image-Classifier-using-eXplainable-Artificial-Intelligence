@@ -6,48 +6,31 @@ from tensorflow.keras.preprocessing import image
 import matplotlib.pyplot as plt
 import os
 import datetime
-import DataManager
+from DataManager import ImageManager
 
 DATA_PATH = os.path.join(os.getcwd(), "Datasets\\Augmented Mixed Binary")
 
 ARCHITECTURE = 'SimpleCNN'
-IMG_DIMS = (64, 64)
+IMG_DIMS = (32, 32)
 DEFAULT_NAME = f'{IMG_DIMS[0]}x{IMG_DIMS[1]}{ARCHITECTURE}'
 
 classifier = ExplainableImageClassifier()
+manager = ImageManager()
 
-# classifier.train_new_model(
-#     architecture=ARCHITECTURE,
-#     training_path=DATA_PATH,
-#     img_dims=IMG_DIMS,
-#     auto_balance_dataset=True,
-#     epochs=20,
-#     patience=10,
-#     custom_name=None,
-#     save_model=True,
-#     data_split=(.7, .15, .15)
-# )
+classifier.train_new_model(
+    architecture=ARCHITECTURE,
+    training_path=DATA_PATH,
+    img_dims=IMG_DIMS,
+    auto_balance_dataset=True,
+    epochs=5,
+    patience=10,
+    custom_name=None,
+    save_model=True,
+    save_history=True,
+    data_split=(.7, .15, .15)
+)
 
-# train_ds, _, test_ds = classifier.image_manager.load_data_from_directory(
-#                     path=DATA_PATH,
-#                     img_dims=IMG_DIMS,
-#                     batch_size=32,
-#                     auto_balance_dataset=True,
-#                     data_split=(.7, .15, .15)
-# )
-
-
-classifier.load_model_from_tf(DEFAULT_NAME)
-# print(classifier.get_confusion_matrix(DEFAULT_NAME, test_ds))
-
-
-# train_ds, _, test_ds = classifier._load_data_from_directory(
-#                     path=TRAIN_PATH,
-#                     img_height=IMG_HEIGHT,
-#                     img_width=IMG_WIDTH,
-#                     batch_size=32,
-#                     auto_balance_dataset=True
-# )
+# classifier.load_model_from_tf(DEFAULT_NAME)
 
 # defective_samples = []
 # for img_batch, label_batch in test_ds:
@@ -75,16 +58,18 @@ classifier.load_model_from_tf(DEFAULT_NAME)
 # fake_img_batch = np.expand_dims(img, axis=0)
 # predicted_label = classifier.models[DIMS+MODEL_NAME].predict(fake_img_batch)
 
+# image = manager.image_from_directory_to_nparray(
+#         path=os.path.join(os.getcwd(), "Datasets\\01-002-02.bmp"),
+#         dims=IMG_DIMS,
+#         normalize=True
+#         )
 
-explanation = classifier.get_explantion(
-        model_name=DEFAULT_NAME, 
-        image_path=os.path.join(os.getcwd(), "Datasets\\01-002-02.bmp"),
-        method='LIME',
-        save_explanation=False
-        )
+# explanation = classifier.get_lime_explantion(
+#         model_name=DEFAULT_NAME, 
+#         image=image
+#         )
 
-# classifier.show_explanation(explanation, original_image=show_image, truth=label, predicted_class=predicted_label)
-classifier.show_explanation(explanation, truth=0)
+# classifier.plot_explanation(explanation=explanation, original_image=image, truth=0)
 
 
 # classifier.show_SHAP_explanation(

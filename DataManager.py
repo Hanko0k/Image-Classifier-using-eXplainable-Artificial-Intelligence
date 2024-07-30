@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow.keras.preprocessing import image_dataset_from_directory
 import numpy as np
 import matplotlib.pyplot as plt
+from PIL import Image
 
 
 class ImageManager:
@@ -192,3 +193,11 @@ class ImageManager:
             plt.title(class_names[label_batch[n]])
             plt.axis("off")
         plt.show()
+
+    def image_from_directory_to_nparray(self, path, dims: tuple, normalize=False):
+        image = Image.open(path).resize(dims)
+        image = np.array(image)
+        if normalize:
+            image = image/255.0
+
+        return image

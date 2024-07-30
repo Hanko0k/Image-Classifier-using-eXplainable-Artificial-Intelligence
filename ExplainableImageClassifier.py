@@ -21,7 +21,11 @@ import cv2
 from DataManager import ImageManager
 from PIL import Image
 import pickle
-
+from enum import Enum
+import lime.lime_image
+from lime.wrappers.scikit_image import SegmentationAlgorithm
+from skimage.segmentation import watershed
+import pickle
 
 class ExplainableImageClassifier:
     def __init__(self, model=None, explainable_method=None):
@@ -188,7 +192,7 @@ class ExplainableImageClassifier:
     
     def train_new_model(self, architecture: str, training_path, auto_balance_dataset, img_dims, 
                         channels=3, batch_size=32, epochs=None, patience=5, seed=42, custom_name=None, 
-                        save_model=False, data_split=(.7, .15, .15)):
+                        save_model=False, save_history=False, data_split=(.7, .15, .15)):
         
         if custom_name is None:
             model_name = f"{img_dims[0]}x{img_dims[1]}{architecture}"
@@ -228,7 +232,7 @@ class ExplainableImageClassifier:
             )
             callbacks.append(early_stopping)
         
-        self.models[model_name].fit(
+        history = self.models[model_name].fit(
             train_data, 
             epochs=epochs, 
             batch_size=batch_size, 
@@ -239,6 +243,14 @@ class ExplainableImageClassifier:
         if save_model:
             self.save_model_to_tf(model_name)
 
+        if save_history:
+            target_dir = os.path.join('Trained Models', model_name)
+            if not os.path.exists(target_dir):
+                os.makedirs(target_dir)
+
+            with open(os.path.join(target_dir, f'{model_name}_training_history.pkl'), 'wb') as f:
+                pickle.dump(history.history, f)
+                                   
         return None
 
     def plot_training_history(self, history):
@@ -267,88 +279,61 @@ class ExplainableImageClassifier:
         pred = self.models[model_name].predict(image)
         return pred
     
-    def get_explantion(self, model_name, method, image=None, image_path=None, save_explanation=False):
+    def get_lime_explantion(self, model_name, image):
 
-        if image_path != None:
-
-            model_input_shape = self.models[model_name].input.shape
-            target_size = (model_input_shape[1], model_input_shape[2])
-
-            image = Image.open(image_path).resize(target_size)
-
-            image = np.array(image) / 255.0
-
-        # img = img.numpy().astype('uint8')
         explanation = self.explainer.explain_instance(
-                                    image, 
-                                    classifier_fn= lambda image: self.model_predict(model_name, image), 
-                                    #  top_labels=5, 
-                                    num_samples=1000 # Increase or decrease depending on the complexity
-                                    ) 
-        
-        if save_explanation:
-            file_name = f'{method}_explanation'
-            with open(file_name.pkl, 'wb') as f:
-                pickle.dump(explanation, f)
-        
-        return explanation
-    
-    def load_explanation(path):
-        with open (path, 'wb') as f:
-            explanation = pickle.load(f)
+            image=image, 
+            classifier_fn= lambda image: self.model_predict(model_name, image), 
+            top_labels=2, 
+            num_samples=1000, # Increase or decrease depending on the complexity
+            segmentation_fn=SegmentationAlgorithm('quickshift', kernel_size=1, max_dist=200, ratio=0.2)
+            )
 
         return explanation
-
-    def show_explanation(self, explanation, truth, original_image=None, predicted_class=None):
     
-        # temp, mask = explanation.get_image_and_mask(explanation.top_labels[0], positive_only=False, num_features=10, hide_rest=False)
-     
 
-          # Get the image and mask from the explanation
-        # image = original_image / 255.0
-        temp, mask = explanation.get_image_and_mask(explanation.top_labels[0], positive_only=True, num_features=5, hide_rest=False)
-        image = temp / 255
+    def plot_explanation(self, explanation, original_image, truth, predicted_class=None):
 
-        # img_boundry = mark_boundaries(temp, mask)
-        img_boundry = mark_boundaries(temp, mask)
-
-        # Create a mask overlay with transparency
-        mask_overlay = np.zeros_like(temp)
-        mask_overlay[mask == 1] = [0, 1, 0]  # Red color for important regions
-        mask_overlay = np.clip(mask_overlay, 0, 1)
-
-        # Blend the original image and the mask overlay
-        overlay_image = temp.copy()
-        alpha = 0.5  # Transparency factor
-        overlay_image[mask == 1] = alpha * temp[mask == 1] + (1 - alpha) * mask_overlay[mask == 1]
-
-
-
-        # image = temp / 2 + 0.5
-
-        # plt.imshow(mark_boundaries(temp / 255.0, mask))
         
-        # plt.show()
+        if isinstance(explanation, lime.lime_image.ImageExplanation):
+            temp, mask = explanation.get_image_and_mask(
+                    label=explanation.top_labels[0], 
+                    positive_only=True, 
+                    negative_only=False,
+                    hide_rest=False,
+                    num_features=5,
+                    min_weight=0.0
+                )
 
-        # The image with the overlay
-        fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+            # Create a mask overlay with transparency
+            mask_overlay = np.zeros_like(temp)
+            mask_overlay[mask == 1] = [0, 1, 0]  # Green color for important regions
+            mask_overlay = np.clip(mask_overlay, 0, 1)
 
-        # Display original image
-        ax[0].imshow(temp)
-        plt.title(f"Predicted: , Actual: {truth}")
-        ax[0].set_title('Original Image')
-        ax[0].axis('off')
+            # Blend the original image and the mask overlay
+            overlay_image = temp.copy()
+            alpha = 0.5  # Transparency factor
+            overlay_image[mask == 1] = alpha * temp[mask == 1] + (1 - alpha) * mask_overlay[mask == 1]
 
-        # Display image with mask
-        ax[1].imshow(overlay_image)
-        ax[1].set_title('LIME Explanation')
-        ax[1].axis('off')
+            # The image with the overlay
+            fig, ax = plt.subplots(1, 2, figsize=(12, 6))
 
-        # fig.suptitle(f'Predicted: {predicted_class}, Actual: {truth}', fontsize=16)
-        fig.suptitle(f'Predicted: {explanation.top_labels[0]}, Actual: {truth}', fontsize=16)
-      
-        self.save_plot(plt)
-        # plt.show()
+            # Display original image
+            ax[0].imshow(original_image)
+            plt.title(f"Predicted: , Actual: {truth}")
+            ax[0].set_title('Original Image')
+            ax[0].axis('off')
+
+            # Display image with mask
+            ax[1].imshow(overlay_image)
+            ax[1].set_title('LIME Explanation')
+            ax[1].axis('off')
+
+            # fig.suptitle(f'Predicted: {predicted_class}, Actual: {truth}', fontsize=16)
+            fig.suptitle(f'Predicted: {explanation.top_labels[0]}, Actual: {truth}', fontsize=16)
+        
+            self.save_plot(plt)
+            plt.show()
 
         return None
 
@@ -381,7 +366,6 @@ class ExplainableImageClassifier:
 
     def normalize_shap_values(self, shap_values):
        
-
         shap_min = np.min(shap_values)
         shap_max = np.max(shap_values)
 
@@ -407,10 +391,6 @@ class ExplainableImageClassifier:
         # if len(image.shape) == 3:
         #     image = np.expand_dims(image, axis=0)
 
-        # print(f"Batched image shape: {image.shape}")
-        # shap.explainers.Deep..op_handlers["AddV2"] = shap.explainers.Deep.deep_tf.passthrough
-    
-        # Use DeepExplainer with the model directly
         explainer = shap.DeepExplainer(self.models[model_name], background)
 
         shap_values = explainer.shap_values(image)
