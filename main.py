@@ -32,7 +32,7 @@ manager = ImageManager()
 
 classifier.load_model_from_tf(DEFAULT_NAME)
 
-_, _, test_ds = manager.load_data_from_directory(
+train_ds, _, test_ds = manager.load_data_from_directory(
         path=DATA_PATH,
         data_split=(.7, .15, .15),
         img_dims=IMG_DIMS,
@@ -53,19 +53,18 @@ image = manager.get_rand_image_from_testset(test_set=test_ds, label=0, normalize
 #         image=image
 # )
 
-explanation = classifier.get_superimposed_gradcam(
-    img=image,
-    model_name=DEFAULT_NAME
-    )
+# explanation = classifier.get_superimposed_gradcam(
+#     img=image,
+#     model_name=DEFAULT_NAME
+#     )
 
-# classifier.show_SHAP_explanation(
-#     model_name=DIMS+MODEL_NAME, 
-#     train_ds=train_ds,
-#     image=fake_img_batch,
-# )
+explanation = classifier.get_SHAP_explanation(
+    model_name=DEFAULT_NAME,
+    train_ds=train_ds,
+    image=image,
+)
 
 model_pred = classifier.model_predict(DEFAULT_NAME, image)
-
 classifier.plot_explanation(
         explanation=explanation, 
         original_image=image,

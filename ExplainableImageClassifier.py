@@ -27,6 +27,13 @@ from lime.wrappers.scikit_image import SegmentationAlgorithm
 from skimage.segmentation import watershed
 import pickle
 
+# This class is a wrapper and adds a 'type' metadata to explanations to reduce ambiguity in their handling
+# (ex. both GradCAM and SHAP return numpy.ndarray)
+class Explanation:
+    def __init__(self, data, type):
+        self.data = data
+        self.type = type
+    
 class ExplainableImageClassifier:
     def __init__(self, model=None, explainable_method=None):
         self.image_manager = ImageManager()
@@ -298,8 +305,7 @@ class ExplainableImageClassifier:
 
         return explanation
     
-
-    def plot_explanation(self, explanation, original_image, pred_label, ground_truth):
+    def plot_explanation(self, explanation, original_image, pred_label=None, ground_truth=None):
 
         # Generalized plot settings
         fig, ax = plt.subplots(1, 2, figsize=(12, 6))
@@ -307,7 +313,9 @@ class ExplainableImageClassifier:
         ax[0].set_title('Original Image')
         ax[0].axis('off')
         ax[1].axis('off')
-        fig.suptitle(f'Predicted: {pred_label}, Actual: {ground_truth}', fontsize=16)
+        
+        if pred_label != None and ground_truth != None:
+            fig.suptitle(f'Predicted: {pred_label}, Actual: {ground_truth}', fontsize=16)
 
         if isinstance(explanation, lime.lime_image.ImageExplanation):
             temp, mask = explanation.get_image_and_mask(
@@ -332,14 +340,17 @@ class ExplainableImageClassifier:
             # Display image with mask
             ax[1].imshow(overlay_image)
             ax[1].set_title('LIME Explanation')
-
-            # pred_label = explanation.top_labels[0] # Since binary classifier
             
-        elif isinstance(explanation, np.ndarray):
+        elif isinstance(explanation, Explanation) and explanation.type == 'cradcam':
             # Display image with mask
             ax[1].imshow(explanation)
             ax[1].set_title('Crad-CAM Explanation')
 
+            
+        elif isinstance(explanation, Explanation) and explanation.type == 'shap':
+            plt.close() # TODO: This is temporary until plotting is reworked.
+            shap.image_plot(explanation.data, np.expand_dims(original_image, axis=0), show=False)
+           
         self.save_plot(plt)
         plt.show()
 
@@ -356,7 +367,6 @@ class ExplainableImageClassifier:
         plt.savefig(path)
         
         return None
-
 
     def random_undersample(self, data_dir, target_class, target_size):
         class_dirs = [os.path.join(data_dir, name) for name in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, name))]
@@ -379,43 +389,30 @@ class ExplainableImageClassifier:
         
 
     def extract_background(self, dataset, sample_size=50):
-        # Unbatch the dataset to get individual elements
         dataset = dataset.unbatch().take(sample_size)
         # Extract samples and concatenate to form the background dataset
         background_data = np.array([image.numpy() for image, _ in dataset])
 
-        # print(f"Background data shape: {background_data.shape}")
-
         return background_data
 
-    def show_SHAP_explanation(self, model_name, train_ds, image, sample_size=100) -> None:
-        # train_ds, _, _ = self._load_dataset(data_path)
-
+    def get_SHAP_explanation(self, model_name, train_ds, image, sample_size=100) -> np.ndarray:
+     
         background = self.extract_background(train_ds, sample_size)
-      
-        # Ensure the input image is batched correctly
-        # if len(image.shape) == 3:
-        #     image = np.expand_dims(image, axis=0)
+
+        if self.models[model_name].input_shape[0] is None: # Model expects batches
+            if not self.image_manager.is_batched(image): # Image isn't batched
+                image = np.expand_dims(image, axis=0)
+
+        else: # Model doesn't expect batches
+            if self.image_manager.is_batched(image): # Image is batched
+                np.squeeze(image, axis=0)
 
         explainer = shap.DeepExplainer(self.models[model_name], background)
-
         shap_values = explainer.shap_values(image)
-
+    
         shap_values_normalized = self.normalize_shap_values(shap_values)
-
-        shap.image_plot(shap_values_normalized, image, show=False)
-
-        sub_dir = 'Plots'
-
-        if not os.path.exists(sub_dir):
-            os.makedirs(sub_dir)
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"SHAP_plot_{timestamp}.png"
-        path = os.path.join(sub_dir, filename)
-        plt.savefig(path)
-
-        return None
+        
+        return Explanation(data=shap_values_normalized, type='shap')
     
     def get_gradcam_heatmap(self, image, model_name, last_conv_layer_name, pred_index=None):
         model = self.models[model_name]
@@ -468,4 +465,4 @@ class ExplainableImageClassifier:
 
         superimposed_img = cv2.addWeighted(img, 1, heatmap_rgb, alpha, 0)
 
-        return superimposed_img
+        return Explanation(data=superimposed_img, type='cradcam')
