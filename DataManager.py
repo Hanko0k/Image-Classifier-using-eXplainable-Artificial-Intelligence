@@ -1,8 +1,10 @@
 import tensorflow as tf
 from tensorflow.keras.preprocessing import image_dataset_from_directory
+from tensorflow.python.data.ops.take_op import _TakeDataset
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
+import random
 
 
 class ImageManager:
@@ -11,7 +13,7 @@ class ImageManager:
         return None
 
     def load_data_from_directory(self, path, data_split, img_dims, batch_size, seed=42, 
-                                flip_binary_labels=False, auto_balance_dataset=False):
+                                flip_binary_labels=False, auto_balance_dataset=False, preprocess=True):
             
         if auto_balance_dataset:
             dataset = image_dataset_from_directory(
@@ -38,7 +40,8 @@ class ImageManager:
         if flip_binary_labels:
             dataset = dataset.map(self._flip_binary_labels)
 
-        dataset = dataset.map(self._preprocess)
+        if preprocess:
+            dataset = dataset.map(self._preprocess)
 
         # AUTOTUNE = tf.data.AUTOTUNE # Use caching and prefetching to improve performance.
         # train_ds = train_ds.cache().shuffle(1000).prefetch(buffer_size=AUTOTUNE)
@@ -122,7 +125,7 @@ class ImageManager:
         return train_ds, val_ds, test_ds
     
     def _preprocess(self, image, label):
-
+      
         image = image / 255.0 # Normalise
         
         return image, label
@@ -201,3 +204,33 @@ class ImageManager:
             image = image/255.0
 
         return image
+    
+    def get_rand_image_from_testset(self, test_set, label, normalize=False) -> np.ndarray:
+        
+        if self.is_batched(test_set):
+            test_set = test_set.unbatch()
+
+        samples = list(test_set)
+        relevant_images = []
+        for image, instance_label in samples:
+            if instance_label == label:
+                relevant_images.append(image)
+
+        rand_image = random.choice(relevant_images).numpy().astype("float64")
+        if normalize:
+            rand_image = rand_image/255.0
+
+        return rand_image
+    
+    def is_batched(self, obj):
+        if isinstance(obj, _TakeDataset):
+            features_spec, _ = obj.element_spec
+            if features_spec.shape[0] is None:
+                return True
+            return False
+        
+        if isinstance(obj, np.ndarray):
+            return obj.ndim > 3
+        
+        else:
+            raise TypeError(f"Unable to handle {type(obj)} type object")

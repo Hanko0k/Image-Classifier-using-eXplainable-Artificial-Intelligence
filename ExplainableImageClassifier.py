@@ -144,19 +144,19 @@ class ExplainableImageClassifier:
         elif architecture == '5DeepCNN':
             model = Sequential()
 
-            model.add(Conv2D(32, (3, 3), activation='relu', input_shape=input_shape))
+            model.add(Conv2D(32, (3, 3), activation='relu', padding='same', input_shape=input_shape))
             model.add(MaxPooling2D((2, 2)))
 
-            model.add(Conv2D(64, (3, 3), activation='relu'))
+            model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
             model.add(MaxPooling2D((2, 2)))
 
-            model.add(Conv2D(128, (3, 3), activation='relu'))
+            model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
             model.add(MaxPooling2D((2, 2)))
 
-            model.add(Conv2D(256, (3, 3), activation='relu'))
+            model.add(Conv2D(256, (3, 3), activation='relu', padding='same'))
             model.add(MaxPooling2D((2, 2)))
    
-            model.add(Conv2D(512, (3, 3), activation='relu'))
+            model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
             model.add(MaxPooling2D((2, 2)))
  
             model.add(Flatten())
@@ -276,25 +276,39 @@ class ExplainableImageClassifier:
         plt.show()
     
     def model_predict(self, model_name, image):
-        pred = self.models[model_name].predict(image)
-        return pred
+        if self.models[model_name].input_shape[0] is None: # Model expects batches
+            if not self.image_manager.is_batched(image): # Image isn't batched
+                image = np.expand_dims(image, axis=0)
+
+        else: # Model doesn't expect batches
+            if self.image_manager.is_batched(image): # Image is batched
+                np.squeeze(image, axis=0)
+
+        return self.models[model_name].predict(image)
     
     def get_lime_explantion(self, model_name, image):
 
+        image.astype("float32")
         explanation = self.explainer.explain_instance(
             image=image, 
             classifier_fn= lambda image: self.model_predict(model_name, image), 
             top_labels=2, 
             num_samples=1000, # Increase or decrease depending on the complexity
-            segmentation_fn=SegmentationAlgorithm('quickshift', kernel_size=1, max_dist=200, ratio=0.2)
             )
 
         return explanation
     
 
-    def plot_explanation(self, explanation, original_image, truth, predicted_class=None):
+    def plot_explanation(self, explanation, original_image, pred_label, ground_truth):
 
-        
+        # Generalized plot settings
+        fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+        ax[0].imshow(original_image)
+        ax[0].set_title('Original Image')
+        ax[0].axis('off')
+        ax[1].axis('off')
+        fig.suptitle(f'Predicted: {pred_label}, Actual: {ground_truth}', fontsize=16)
+
         if isinstance(explanation, lime.lime_image.ImageExplanation):
             temp, mask = explanation.get_image_and_mask(
                     label=explanation.top_labels[0], 
@@ -304,7 +318,7 @@ class ExplainableImageClassifier:
                     num_features=5,
                     min_weight=0.0
                 )
-
+            
             # Create a mask overlay with transparency
             mask_overlay = np.zeros_like(temp)
             mask_overlay[mask == 1] = [0, 1, 0]  # Green color for important regions
@@ -315,31 +329,24 @@ class ExplainableImageClassifier:
             alpha = 0.5  # Transparency factor
             overlay_image[mask == 1] = alpha * temp[mask == 1] + (1 - alpha) * mask_overlay[mask == 1]
 
-            # The image with the overlay
-            fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-
-            # Display original image
-            ax[0].imshow(original_image)
-            plt.title(f"Predicted: , Actual: {truth}")
-            ax[0].set_title('Original Image')
-            ax[0].axis('off')
-
             # Display image with mask
             ax[1].imshow(overlay_image)
             ax[1].set_title('LIME Explanation')
-            ax[1].axis('off')
 
-            # fig.suptitle(f'Predicted: {predicted_class}, Actual: {truth}', fontsize=16)
-            fig.suptitle(f'Predicted: {explanation.top_labels[0]}, Actual: {truth}', fontsize=16)
-        
-            self.save_plot(plt)
-            plt.show()
+            # pred_label = explanation.top_labels[0] # Since binary classifier
+            
+        elif isinstance(explanation, np.ndarray):
+            # Display image with mask
+            ax[1].imshow(explanation)
+            ax[1].set_title('Crad-CAM Explanation')
+
+        self.save_plot(plt)
+        plt.show()
 
         return None
 
     def save_plot(self, plot) -> None:
         sub_dir = 'Plots'
-
         if not os.path.exists(sub_dir):
             os.makedirs(sub_dir)
 
@@ -348,7 +355,6 @@ class ExplainableImageClassifier:
         path = os.path.join(sub_dir, filename)
         plt.savefig(path)
         
-
         return None
 
 
@@ -397,7 +403,6 @@ class ExplainableImageClassifier:
 
         shap_values_normalized = self.normalize_shap_values(shap_values)
 
-        # Since it's a binary classifier, use shap_values[0]
         shap.image_plot(shap_values_normalized, image, show=False)
 
         sub_dir = 'Plots'
@@ -412,15 +417,23 @@ class ExplainableImageClassifier:
 
         return None
     
-    def make_gradcam_heatmap(self, img_array, model_name, last_conv_layer_name, pred_index=None):
+    def get_gradcam_heatmap(self, image, model_name, last_conv_layer_name, pred_index=None):
         model = self.models[model_name]
+
+        if model.input_shape[0] is None: # Model expects batches
+            if not self.image_manager.is_batched(image): # Image isn't batched
+                image = np.expand_dims(image, axis=0)
+
+        else: # Model doesn't expect batches
+            if self.image_manager.is_batched(image): # Image is batched
+                np.squeeze(image, axis=0)
 
         grad_model = tf.keras.models.Model(
             [model.inputs], [model.get_layer(last_conv_layer_name).output, model.output]
         )
 
         with tf.GradientTape() as tape:
-            conv_outputs, predictions = grad_model(img_array)
+            conv_outputs, predictions = grad_model(image)
             if pred_index is None:
                 pred_index = tf.argmax(predictions[0])
             class_channel = predictions[:, pred_index]
@@ -436,9 +449,15 @@ class ExplainableImageClassifier:
         
         return heatmap.numpy()
     
-    def superimpose_heatmap(self, img, heatmap, alpha=0.4):
+    def get_superimposed_gradcam(self, img, model_name, alpha=0.4):
+
+        heatmap = self.get_gradcam_heatmap(
+                image=img, 
+                model_name=model_name, 
+                last_conv_layer_name='conv2d_2'
+                )
   
-        img = img.numpy().astype("float32")
+        img = img.astype("float32")
         img = img * 255
         img = img.astype('uint8')
     
@@ -447,7 +466,6 @@ class ExplainableImageClassifier:
         heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
         heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
 
-        # superimposed_img = heatmap * alpha + img
         superimposed_img = cv2.addWeighted(img, 1, heatmap_rgb, alpha, 0)
 
         return superimposed_img
