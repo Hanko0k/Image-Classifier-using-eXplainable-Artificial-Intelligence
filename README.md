@@ -33,8 +33,7 @@ The project only currently supports binary classification tasks, but additonal a
 
 ## ImageManager Methods
 
-### `load_data_from_directory(path, data_split, img_dims, batch_size, seed=42,
-flip_binary_labels=False, auto_balance_dataset=False, preprocess=True)`
+### `load_data_from_directory(path, data_split, img_dims, batch_size, seed=42, flip_binary_labels=False, auto_balance_dataset=False, preprocess=True)`
 - **Description**: Loads image data in from directory into training, validation and test datasets based on 'data_split'. Given 'seed' remains constant the images will always load and shuffle the same way.
 - **Parameters**:
   - `path` (str): Absolute path of the directory of image files. Expects subfolders to be the subclasses.
@@ -59,3 +58,18 @@ flip_binary_labels=False, auto_balance_dataset=False, preprocess=True)`
         auto_balance_dataset=True,
         preprocess=False)
 ```
+### `image_from_directory_to_nparray(path, dims, normalize=False)`
+- `path` (str): Absolute path of the directory containing the image.
+- `dims` (tuple): (height, width) Dimensions of the 2D image. Remember to keep consistent dimensions with what your model expects to see if already trained.
+- `normalize` (bool): If set True will normalize the image after loading it into memory. Important to do so if your model was trained on normalized images.
+- **Returns**: A 3-channel colour image of size 'dims' as a numpy array.
+
+### `get_rand_image_from_testset(test_set, label, normalize=False)
+- `test_set` (_TakeDataset): The set from which to select an image.
+- `label` (int): Indicate which class you want the image to come from (0-1 for binary classifiers).
+- `normalize` (bool):  If set True will normalize the image after loading it into memory. Important to do so if your model was trained on normalized images.
+- **Returns**: A 3-channel colour image as a numpy array.
+
+### `is_batched(obj)`
+-`obj` (_TakeDataset): The object representing the set of images being tested for whther it is batched or not.
+- **Returns**: True or False
